@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>XML eXternal Entity (XXE) útok</title>
+    <meta charset="utf-8">
+    <style>
+      @import url(https://fonts.googleapis.com/css?family=Yanone+Kaffeesatz);
+      @import url(https://fonts.googleapis.com/css?family=Droid+Serif:400,700,400italic);
+      @import url(https://fonts.googleapis.com/css?family=Ubuntu+Mono:400,700,400italic);
+
+      body { font-family: 'Droid Serif'; }
+      h1, h2, h3 {
+        font-family: 'Yanone Kaffeesatz';
+        font-weight: normal;
+      }
+      .remark-code, .remark-inline-code { font-family: 'Ubuntu Mono'; }
+      
+      .asAServiceBG { background-image: url('http://mschnlnine.vo.llnwd.net/d1/inetpub/kevinremde/Images/679669067395_DBE9/image_3.png');  background-repeat: no-repeat;  background-size: contain; }
+    </style>
+  </head>
+  <body>
+    <textarea id="source">
+
+# Je tu problém?
+
+```java
+@ApplicationPath("/")
+public class HelloApp extends Application {
+
+    @Path("/")
+    public static class HelloResource {
+
+        @Consumes("application/xml")
+        @POST
+        public String doPost(Document doc) {
+            return "Hello, " + doc.getDocumentElement().getTextContent();
+        }
+    }	
+}
+```
+
+???
+Ahoj.
+
+Mam tu jednoduchou restovou aplikaci. Která vrací uživateli to co jí pošle. Vidíte v ní nějaký problém?
+
+---
+
+class: center, middle
+
+# XML eXternal Entity (XXE) útok
+
+???
+V této prezentaci vám představím XXE útok, ukážu nějaké demo a uvedu reálné příklady.
+
+---
+# Entita
+* V XML referencuje text
+
+* Interní vs. Externí
+
+* Externí entita je definovaná přes systémový identifikátor 'SYSTEM':
+
+```xml
+<!ENTITY name SYSTEM "URI">
+```
+* URI je cesta k lokálnímu nebo vzdálenému obsahu
+
+* Definována v DTD
+
+Příklad:
+```xml
+<?xml version="1.0"?>
+<!DOCTYPE copyright[
+<!ENTITY c SYSTEM "http://www.w3.org/xmlspec/copyright.xml">
+]>
+<copyright>&c;</copyright>
+```
+
+???
+
+Entita je prvek, který referencuje nějaký text v XML.
+
+Máme dva druhy entit - interní a externí. Nás zajímá externí entita což je taková entita, která je definovaná přes systémový indentifikátor 'SYSTEM'. 
+
+V příkladu máme nadefinovanou entitu, která referencuje obsah na adrese dané "URI"
+
+URI může být cesta k lokálnímu, ale i vzdálenému obsahu, který je dostupný z kontextu aplikace
+
+Externí entitu je možné definovat v inline i externích DTD
+
+V příkladu je obvyklé použití externí entity. 
+
+Entitu v xml dokumentu definujeme v části DOCTYPE. DOCTYPE určuje strukturu xml dokumentu a tak definuje validní elementy v dokumentu.
+
+V DOCTYPE máme nadefinovanou externí entitu "c", která referencuje copyright.xml dostupný přes http.
+
+
+---
+
+# XXE útok
+
+* Na aplikace, které parsují XML vstup
+
+* XML parsery mají obvykle defaultně povolené parsování externích entit
+
+* Reference na externí entitu je nahrazena obsahem externího souboru
+
+* Získání důvěrných informací jako hesla nebo uživatelská data
+
+Příklad:
+```xml
+<?xml version="1.0"?>
+<!DOCTYPE echo[
+<!ENTITY xxe SYSTEM "/path/file">
+]>
+<echo>&xxe;</echo>
+```
+
+???
+
+XXE je použitelné na aplikace, které parsují XML vstup.
+
+Java XML parsery mají obvykle defaultně povolené parsování externích entit.
+
+A spočívá v tom, že reference na externí entitu je ve výstupu nahrazena obsahem externího souboru
+
+V druhém příkladu máme nadefinovanou externí entitu "xxe". Během parsováni xml aplikací, bude "&xxe;" v echo tagu nahrazena obsahem souboru v /path/file
+
+Tímto způsobem mohou být odhaleny důvěrné informace jako hesla nebo uživatelská data
+
+---
+
+# Demo aplikace
+
+```java
+@ApplicationPath("/")
+public class HelloApp extends Application {
+
+    @Path("/")
+    public static class HelloResource {
+
+        @Consumes("application/xml")
+        @POST
+        public String doPost(Document doc) {
+            return "Hello, " + doc.getDocumentElement().getTextContent();
+        }
+    }	
+}
+```
+
+???
+
+Vezmeme Webovou aplikaci používající RESTEASY - implementaci JAX-RS (REST).
+Aplikace HelloApp ma jeden restový endpoint, který očekavá POST requesty s xml daty a echuje xml nazpět klientovi
+
+Deployneme ji do Wildfly 8.0.0.Final (protože pouzivá zranitelnou verzi resteasy)
+
+Pro uživatele posílajícího očekávaná data aplikace vypíše "Hello, uzivateli"
+
+curl -X POST --header "Content-Type:application/xml;charset=UTF-8" -d '<?xml version="1.0"?><echo>Katka</echo>' http://localhost:8080/hello
+
+Pro uživatele, který chce přes tuto aplikaci získat obsah nějakého lokálního souboru aplikace to není žádný problém.
+Využijeme už opravené zranitelnosti v RESTEASY, provedeme XXE útok a vypíšeme si obsah /etc/passwd.
+
+curl -X POST --header "Content-Type:application/xml;charset=UTF-8" -d '<?xml version="1.0"?><!DOCTYPE foo[<!ENTITY xxe SYSTEM "/etc/passwd">]><echo>&xxe;</echo>' http://localhost:8080/hello
+
+Zranitelnost spočívá v tom, že Resteasy použije instanci XML parseru, který nemá vypnuto zpracování externích entit.
+
+---
+
+# Jak se bránit
+
+* **Zakázat externí entity**
+
+* Toto nastavení XML parserů není u všech stejné
+
+* [OWASP](https://www.owasp.org/index.php/XML_External_Entity_%28XXE%29_Prevention_Cheat_Sheet) uvádí doporučené nastavení pro xml parsery
+ 
+* [Rešením](http://resources.infosecinstitute.com/xxe-attacks/) je zakázat externí entity a deklaraci DTD v uživatelských xml datech a validovat xml vstup proti statickým DTD
+
+* V Resteasy byla chyba opravena tak, že externí entity byly XML parseru zakázány defaultně
+
+???
+
+**Zakázat externí entity**
+
+Toto nastavení XML parserů není u všech stejné.
+
+Proto je dobré podívat se na OWASP(Komunita pro testování webových aplikací), kde se uvádí doporučené nastavení pro různé xml parsery aby znemožnili XXE
+
+Obecným rešením je zakázat externí entity a deklaraci DTD v uživatelských xml datech a validovat xml vstup proti statickým DTD (uloženým lokálně na serveru aplikace)
+
+V Resteasy byla chyba opravena tak, že externí entity byly XML parseru zakazány defaultně a je možné je přes kontextové parametry aplikace povolit na vlastní riziko vývojáře 
+
+---
+
+# Reálné příklady
+
+Příklad XXE útoku na Google - Toolbar Button galery - odměna $10,000
+https://blog.detectify.com/2014/04/11/how-we-got-read-access-on-googles-production-servers
+
+Příklad XXE útoku při uploadu GPX souboru na RunKeeper 
+http://blog.h3xstream.com/2014/06/identifying-xml-external-entity.html
+
+Příklad XXE útoku na Facebook používající OpenID login - odměna $33,500
+http://www.ubercomp.com/posts/2014-01-16_facebook_remote_code_execution
+
+https://www.facebook.com/notes/facebook-bug-bounty/bug-bounty-highlights-and-updates/818902394790655/
+
+
+???
+
+Pro představu, jak takový reálný útok může vypadat a co z toho můžete mít uvedu pár příkladů.
+
+Týpci si záměrně vybrali relativně méně známou službu Googlu - Toolbar Button galery, a provedli XXE. Dokázali získat soubory z produkčních Google serverů. 
+A protože hned po útoku kontaktovali Google, byli odměněni $10,000 dolarů.
+
+Dalším příkladem je RunKeeper. Je velmi popularní, že třeba po běhu si chcete vystavit svoji trasu veřejně. K tomu je potřeba uploadovat GPX soubor na server. Protože GPX je také xml, nic nebraní tomu poslat v souboru i nějakou externí entitu.
+
+Posledním příkladem je Facebook. Reginaldo Silva objevil, že mnoho implementaci OpenId je zranitelných proti XXE. Dokázal tuto zranitelnost využít a přečíst si soubor ze serveru Facebooku.
+
+Jelikož se ukázalo, že ta objevená zranitelnost byla natolik závažná, že ji bylo možné vyžít k RCE - remote code execution, Reginaldo byl odměněn $33,500 dolary a facebook zakázal parsování externích entit.
+
+
+
+---
+# Bug bounty programy
+
+* Dohoda mezi webovými službami a jednotlivci
+
+* Odhalený bug nebo zranitelnost je reportován nejdřív firmě. Odměnou jsou obvykle peníze.
+
+* [Počátek](https://en.wikipedia.org/wiki/Bug_bounty_program) v Netscapu (1995), motivací bylo zapálení některých zaměstnanců pro odhalování chyb
+
+* Programy mají [Google](https://www.google.com/about/appsecurity/reward-program/), [Twitter](https://hackerone.com/twitter), [Facebook](https://www.facebook.com/whitehat) ale i americká vláda - [Hack the Pentagon](http://www.defense.gov/News/Article/Article/684616/dod-invites-vetted-specialists-to-hack-the-pentagon)
+
+* Seznam bug bounty [programů](https://bugcrowd.com/list-of-bug-bounty-programs)
+
+* [Hackerone](https://hackerone.com/) - Služba pro propojení firem a těch kdo objeví bezpečnostní problém
+
+???
+
+Zajímalo mě jestli reportování bezpečnostních problémů před jejich uveřejněním je jen slušnost lidí nebo pro to existuje nějaká obecná dohoda. A existuje!
+
+Bug bounty programy
+
+Je to dohoda mezi webovými službami nebo firmami a jednotlivci.
+
+Odhalený bug nebo zranitelnost je reportován nejdřív službe/firmě, které se týká. Jako odměna toho, kdo je objevil jsou buď peníze, nebo veřejné poděkování či reklamní předmět.
+Hodnota se odvíjí podle závažnosti reportovaného problému, jsou to obvykle stovky až tisíce dolarů.
+
+Počátek mají v Netscapu (1995), motivací bylo zapálení nekterých zaměstnanců pro odhalování chyb
+
+Programy mají Google, Twitter, Facebook, ale i americka vlada - "Hack the Pentagon"
+
+Existuje i seznam bug bounty programů
+
+Hackerone je služba zprostředkovávající propojení firem a těch kdo objeví bezpečnostní problém
+
+---
+
+class: center, middle
+
+# End
+
+???
+
+Otázky?
+
+</textarea>
+    <script src="remark-0.13.min.js">
+    </script>
+    <script>
+      var slideshow = remark.create();
+    </script>
+  </body>
+</html>
