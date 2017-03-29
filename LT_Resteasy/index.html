@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>RESTEasy</title>
+    <meta charset="utf-8">
+    <style>
+      @import url(https://fonts.googleapis.com/css?family=Yanone+Kaffeesatz);
+      @import url(https://fonts.googleapis.com/css?family=Droid+Serif:400,700,400italic);
+      @import url(https://fonts.googleapis.com/css?family=Ubuntu+Mono:400,700,400italic);
+
+      body { font-family: 'Droid Serif'; }
+      h1, h2, h3 {
+        font-family: 'Yanone Kaffeesatz';
+        font-weight: normal;
+      }
+      .remark-code, .remark-inline-code { font-family: 'Ubuntu Mono'; }
+      
+      .asAServiceBG { background-image: url('http://mschnlnine.vo.llnwd.net/d1/inetpub/kevinremde/Images/679669067395_DBE9/image_3.png');  background-repeat: no-repeat;  background-size: contain; }
+    </style>
+  </head>
+  <body>
+    <textarea id="source">
+
+
+
+class: center, middle
+
+# RESTEasy
+
+???
+
+
+---
+
+# What does REST mean?
+
+
+###**RE**presentational **S**tate **T**ransfer
+
+It is style of architecture which says how the resources should be *adressed*, *manipulated* and *represented*.
+
+???
+
+
+---
+
+# REST(full) principles
+
+* Every resource (object) has an URI
+
+* The URI is unique - `http://myturtle.com/turtle/111`
+
+* Resource manipulation is done with 4 HTTP methods:
+
+**GET**, **PUT**, **POST**, **DELETE**  (read, update, create and delete)
+
+* Data representation is negotiated between client and server
+
+* Client says what it wants (Accepts* headers), server says what it gave (Content-type header)
+
+???
+
+---
+
+# JAX-RS
+
+* In java we use *Java Api for RESTful Web Services (JAX-RS)*
+
+* JAX-RS is defined in [JSR-311](https://jcp.org/en/jsr/detail?id=311)
+
+* RESTEasy is implementation of JAX-RS 2.0
+
+* Other implementatios - Jersey, Apache CXF
+
+???
+
+
+---
+
+# Simple JAX-RS resource
+
+```java
+@Path("/rest")
+public class HelloResource {
+
+	@GET
+	@Path("/hello")        
+        public String doGet() {
+            return "Hello World";
+        }
+    }	
+}
+```
+
+This resource matches the uri 
+
+**`http://myturtle.com/rest/hello`**
+
+???
+
+Popsat jak ten request funguje?
+
+---
+
+# Uri parameters
+
+```java
+@Path("/rest")
+public class HelloResource {
+
+	@GET
+	@Path("/hello")        
+        public String doGet(@QueryParam("name") String name)) {
+            return "Hello" + name;
+        }
+    }	
+}
+```
+
+This resource matches the uri:
+
+**`http://myturtle.com/rest/hello?name=Katka`**
+
+
+Other annotations for URI parameters:
+
+@PathParam, @MatrixParam, @HeaderParam ...
+
+---
+
+# Response data format - XML example
+
+```java
+@Path("/rest")
+public class HelloResource {
+
+	@GET
+	@Path("/hello")
+	@Produces("application/json")        
+        public HelloEntity doGet(@QueryParam("name") String name)) {
+            return new HelloEntity(name);
+        }
+    }	
+}
+
+@XmlRootElement
+public class HelloEntity {
+	
+	private String name;
+
+	@XmlElement
+	// getter name
+}
+```
+
+---
+
+# How it works? - Entity providers!
+
+* The Entity providers are objects which know how to read/write data from/to the request/response
+
+* RESTEasy has built-in JAXB entity provider to convert Objects <-> XML
+
+* The format of the data in the Response is determined by **@Produces/@Consumes** annotations
+
+* RESTEasy supports also other providers JSON, Yaml, Plain Text, Html ...
+
+* And you can write your custom entity provider as well
+
+---
+# References
+
+* Book RESTfull Java with JAX-RS 2.0 from Bill Burke
+
+* https://dzone.com/articles/putting-java-rest
+
+* https://www.slideshare.net/mojavelinux/cdi-seam-resteasy-you-havent-seen-rest-yet
+
+
+</textarea>
+    <script src="remark-0.13.min.js">
+    </script>
+    <script>
+      var slideshow = remark.create();
+    </script>
+  </body>
+</html>
