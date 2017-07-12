@@ -44,7 +44,7 @@ It is style of architecture which says how the resources should be *adressed*, *
 
 ---
 
-# REST(full) principles
+# REST(ful) principles
 
 * Every resource (object) has an URI
 
@@ -136,7 +136,7 @@ public class HelloResource {
 
 	@GET
 	@Path("/hello")
-	@Produces("application/json")        
+	@Produces("application/xml")        
         public HelloEntity doGet(@QueryParam("name") String name)) {
             return new HelloEntity(name);
         }
@@ -168,11 +168,14 @@ public class HelloEntity {
 * And you can write your custom entity provider as well
 
 ---
+# Demo application
+
+---
 # References
 
-* Book RESTfull Java with JAX-RS 2.0 from Bill Burke
+* https://docs.oracle.com/javaee/7/tutorial/jaxrs.htm
 
-* https://dzone.com/articles/putting-java-rest
+* Book RESTfull Java with JAX-RS 2.0 from Bill Burke
 
 * https://www.slideshare.net/mojavelinux/cdi-seam-resteasy-you-havent-seen-rest-yet
 
